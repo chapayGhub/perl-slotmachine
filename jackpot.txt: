@@ -1,1 +1,6 @@
-Jackpot - Funcionamiento
+Jackpot - Prototipo:
+
+1. connect_to( $filename )
+2. get()
+3. add($funds)
+4. retire()
