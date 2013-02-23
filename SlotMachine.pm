@@ -5,7 +5,7 @@ use  warnings;
 package  SlotMachine;
 use  constant{
   JOKER => 999,
-  WIN_ALL => 1,
+  WIN_SIMPLE     => 1,
   WIN_WITH_JOKER => 2,
   WIN_ALL_JOKERS => 3,
 };
@@ -142,7 +142,6 @@ sub  all_results(\&){
 }
 
 # Say all results
-#
 sub  print_all_results(;$){
   my  $self = shift;
   my  $verbose = shift;
@@ -150,7 +149,7 @@ sub  print_all_results(;$){
   my  $count = 0;
   my  $goods = 0;
   $self->all_results( sub{ 
-      my  @result = $self->is_win( @_ );
+      my  @result = $self->get_result( @_ );
       my  $win = shift( @result );
       $count ++;
       my $d;
@@ -185,8 +184,18 @@ sub  print_all_results(;$){
 }
 
 
-
-sub  is_win(@){
+# Return result of given symbols
+# Result is a array
+#   $result[0] is a win type:
+#           LOSE (0)
+#           WIN_SIMPLE (1):     Win something
+#           WIN_WITH_JOKER (2): Win with al least one Joker
+#           WIN_ALL_JOKER(3)  : All of symbols are Jokers
+#   $result[1..n]
+#           numbers of equal symbos (ordered)
+#   if WIN_WITH_JOKER is found, the last position of result ($result[-1]) is Joker quantity
+#
+sub  get_result(@){
   my  $self = shift;
   my  $reels = $self->reels();
   my  $current_reel = 0;
@@ -234,7 +243,7 @@ sub  is_win(@){
   } elsif( $jokers ){
     return  WIN_WITH_JOKER, sort( { $b <=> $a } values %{$counter} ), $jokers;
   } elsif( $has_symbol ){
-    return  WIN_ALL, sort { $b <=> $a } values %{$counter};
+    return  WIN_SIMPLE, sort { $b <=> $a } values %{$counter};
   } else {
     die "Error of result";
   }
