@@ -24,6 +24,8 @@ use  constant WIN_DESCRIPTION => {
 #    jp_chance:    Chance of Jackpot. Default 0.001
 #    jp_increment: Increment of Jackpot fund on every run. Default 0.1 coins
 #    jp_initial:   Initial value of Jackpot. Default 10 coins
+#    jp_minimun:   Minimum price of Jackpot. Default 50 coins
+#    jp_name:      Name for jackpot. Default jp
 #    symbols:      Symbols by reel. Default 6
 #    reels:        Reels of machine. Default 3
 #    jokers:       Quantity of Jokers. Default 0.
@@ -36,6 +38,8 @@ sub  new(;$){
   $opts->{jp_chance} = 0.001    unless exists $opts->{jp_chance};
   $opts->{jp_increment} = 0.1   unless exists $opts->{jp_increment};
   $opts->{jp_initial} = 10      unless exists $opts->{jp_initial};
+  $opts->{jp_minimun} = 50      unless exists $opts->{jp_minimun};
+  $opts->{jp_name} = 'jp'       unless exists $opts->{jp_name};
   $opts->{symbols} = 6          unless exists $opts->{symbols};
   $opts->{reels} = 3            unless exists $opts->{reels};
   $opts->{jokers} = 0           unless exists $opts->{jokers};
