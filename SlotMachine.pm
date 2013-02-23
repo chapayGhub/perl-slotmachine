@@ -107,6 +107,33 @@ sub  win_from(;$){
   return $self->{win_from};
 }
 
+# Get/Sets Jackpot increment
+sub  jp_increment(;$){
+  my $self = shift;
+  if( scalar(@_) == 1 ){
+    $self->{jp_increment} = shift;
+  }
+  return $self->{jp_increment};
+}
+
+# Get/Sets Jackpot chance
+sub  jp_chance(;$){
+  my $self = shift;
+  if( scalar(@_) == 1 ){
+    $self->{jp_chance} = shift;
+  }
+  return $self->{jp_chance};
+}
+
+# Get/Sets Jackpot initial
+sub  jp_initial(;$){
+  my $self = shift;
+  if( scalar(@_) == 1 ){
+    $self->{jp_initial} = shift;
+  }
+  return $self->{jp_initial};
+}
+
 # Get array of symbols for reel
 sub  symbols_by_reel(;$){
   my $self = shift;
