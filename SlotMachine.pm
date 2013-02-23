@@ -19,10 +19,10 @@ use  constant WIN_DESCRIPTION => {
 
 # Create new SlotMachine
 # Options:
-#    payout:       Payout coeficient of the machine. Default 0.95
+#    payout:       Payout coeficient of the machine. Default 0.92
 #    overpay:      Maximun payment over balance. Default 10 coins
 #    jp_chance:    Chance of Jackpot. Default 0.001
-#    jp_increment: Increment of Jackpot fund on every run. Default 0.1 coins
+#    jp_increment: Increment of Jackpot fund on every run. Default 0.07 coins
 #    jp_initial:   Initial value of Jackpot. Default 10 coins
 #    jp_minimun:   Minimum price of Jackpot. Default 50 coins
 #    jp_name:      Name for jackpot. Default jp
@@ -41,10 +41,10 @@ sub  new(;$){
   }
   my ( $class, $opts ) = @_;
   $opts = { } unless $opts;
-  $opts->{payout} = 0.95        unless exists $opts->{payout};
+  $opts->{payout} = 0.92        unless exists $opts->{payout};
   $opts->{overpay} = 10         unless exists $opts->{overpay};
   $opts->{jp_chance} = 0.001    unless exists $opts->{jp_chance};
-  $opts->{jp_increment} = 0.1   unless exists $opts->{jp_increment};
+  $opts->{jp_increment} = 0.07  unless exists $opts->{jp_increment};
   $opts->{jp_initial} = 10      unless exists $opts->{jp_initial};
   $opts->{jp_minimun} = 50      unless exists $opts->{jp_minimun};
   $opts->{jp_name} = 'jp'       unless exists $opts->{jp_name};
