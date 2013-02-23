@@ -3,7 +3,7 @@ use  strict;
 use  warnings;
 
 package  Jackpot;
-use Fcntl qw(:flock);
+use Fcntl qw(:flock SEEK_SET);
 
 
 # Create new file
@@ -22,7 +22,7 @@ sub  _create($){
 sub  connect_to($){
   my ( $class, $filename ) = @_;
   die "Must be called for class" if ref $class;
-  _create $filename unless -e $filename;
+  _create( $filename ) unless -e $filename;
   open( my $fh, "+<", $filename ) or die( "Error reading " . $filename . " - $!" );
   return bless{ f => $filename, h => $fh };
 }
@@ -38,7 +38,7 @@ sub  _fn(){ return shift->{f}; }
 sub  _lock($){
   my $self = shift;
   flock( $self->_fh, LOCK_EX ) or die "Error locking " . $self->_fn . ": $!";
-  seek( $self->_fh, 0, 0 );
+  seek( $self->_fh, 0, SEEK_SET ) or die "Error rewind " . $self->_fn . ": $!";
 }
 
 sub  _unlock($){
@@ -46,13 +46,15 @@ sub  _unlock($){
   flock( $self->_fh, LOCK_UN ) or die "Error unlocking " . $self->_fn . ": $!";
 }
 
-sub  _getdata($){
+sub  _getdata(){
   my  $self = shift;
   my  $data;
   $self->_lock( );
-  read( $self->_fh, $data, 8 ) or die "Error reading - $!";
+  my $bytes = read( $self->_fh, $data, 8 );
+  die "Error reading " . $self->_fn . ": $!" unless defined $bytes;
   $self->_unlock( );
-  return unpack "II", $data;
+  return unpack "II", $data if $bytes;
+  return ( 0, 0 );
 }
 
 sub  _setdata($$$){
@@ -60,15 +62,15 @@ sub  _setdata($$$){
   my  $balance = shift;
   my  $counter = shift;
   my  $data;
-  _lock( $self->_fh );
+  $self->_lock( );
   $data = pack "II", $balance, $counter;
-  print( $self->_fh, $data, 8 ) or die "Error writing - $!";
-  _unlock( $self->_fh );
+  print  { $self->_fh } $data;
+  $self->_unlock( );
 }
 
 # Returns Jackpot balance
 sub  get(){
-  my( $balance, $counter ) = _getdata(shift->{h});
+  my( $balance, $counter ) = shift->_getdata();
   return $balance / 1000;
 }
 
@@ -85,7 +87,7 @@ sub  retire(){
   my  $self  = shift;
   my( $balance, $counter ) = $self->_getdata();
   my $retire = int( $balance / 1000 );
-  $self->_setdata( "II", $balance - $retire * 1000, 0 );
+  $self->_setdata( $balance - $retire * 1000, 0 );
   return  $retire;
 }
 
