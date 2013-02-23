@@ -31,6 +31,14 @@ use  constant WIN_DESCRIPTION => {
 #    jokers:       Quantity of Jokers. Default 0.
 #    win_from:     Quantity of equals result to win. Default: reels
 sub  new(;$){
+  if( scalar( @_ ) > 2 ){
+    my $class = shift;
+    my %opts = ();
+    while( my $o = shift ){
+      $opts{$o} = shift;
+    }
+    return $class->new( \%opts );
+  }
   my ( $class, $opts ) = @_;
   $opts = { } unless $opts;
   $opts->{payout} = 0.95        unless exists $opts->{payout};
