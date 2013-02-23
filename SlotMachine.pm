@@ -4,20 +4,21 @@ use  warnings;
 
 package  SlotMachine;
 # TODO: Pay table
-# TODO: Jackpot symbol
 
 use  constant{
   JOKER => 999,
   WIN_SIMPLE     => 1,
   WIN_WITH_JOKER => 2,
-  WIN_ALL_JOKERS => 3,
+  WIN_JACKPOT    => 3,
+  WIN_ALL_JOKERS => 4,
 };
 
 use  constant WIN_DESCRIPTION => {
   0 => 'Lose',
   1 => 'Win',
   2 => 'Win with joker',
-  3 => 'All jokers'
+  3 => 'Win jackpot',
+  4 => 'All jokers',
 };
 
 # Create new SlotMachine
@@ -28,6 +29,7 @@ use  constant WIN_DESCRIPTION => {
 #    jp_increment: Increment of Jackpot fund on every run. Default 0.07 coins
 #    jp_initial:   Initial value of Jackpot. Default 10 coins
 #    jp_minimun:   Minimum price of Jackpot. Default 50 coins
+#    jp_symbol:    Symbol for Jackpot. Default undef
 #    jp_name:      Name for jackpot. Default jp
 #    symbols:      Symbols by reel. Default 6
 #    reels:        Reels of machine. Default 3
@@ -46,7 +48,7 @@ sub  new(;$){
   $opts = { } unless $opts;
   $opts->{payout} = 0.92        unless exists $opts->{payout};
   $opts->{overpay} = 10         unless exists $opts->{overpay};
-  $opts->{jp_chance} = 0.001    unless exists $opts->{jp_chance};
+  $opts->{jp_chance} = 0.001    unless exists $opts->{jp_chance} || exists $opts->{jp_symbol};
   $opts->{jp_increment} = 0.07  unless exists $opts->{jp_increment};
   $opts->{jp_initial} = 10      unless exists $opts->{jp_initial};
   $opts->{jp_minimun} = 50      unless exists $opts->{jp_minimun};
@@ -57,8 +59,10 @@ sub  new(;$){
   $opts->{win_from} = $opts->{reels}
                                 unless exists $opts->{win_from};
   die "Jokers must be less than or equal than reels" if $opts->{jokers} > $opts->{reels};
+  die "Can't define jp_chance and jp_symbol at same time" if exists $opts->{jp_chance} && exists $opts->{jp_symbol};
 
   my  $self =  bless $opts,  $class;
+  $self->_set_jp_symbol_chance if exists $opts->{jp_symbol};
   return  $self;
 }
 
@@ -131,10 +135,30 @@ sub  jp_increment(;$){
 sub  jp_chance(;$){
   my $self = shift;
   if( scalar(@_) == 1 ){
+    die "Can't define chance, because the Jackpot are defined by Symbol" if exists $self->{jp_symbol};
     $self->{jp_chance} = shift;
   }
+  return $self->{jp_symbol_chance} if( exists $self->{jp_symbol} );
   return $self->{jp_chance};
 }
+
+sub  _set_jp_symbol_chance(){
+  my $self = shift;
+  $self->{jp_symbol_chance} = 1 / 
+      ( $self->{symbols} ** ( $self->{reels} - $self->{jokers} ) * 
+      ( $self->{symbols} + 1 ) ** $self->{jokers} ) ;
+}
+# Get/Sets Jackpot chance
+sub  jp_symbol(;$){
+  my $self = shift;
+  if( scalar(@_) == 1 ){
+    die "Can't define symbol, because the Jackpot are defined by Chance" if exists $self->{jp_chance};
+    $self->{jp_symbol} = shift;
+    $self->_set_jp_symbol_chance;
+  }
+  return $self->{jp_symbol};
+}
+
 
 # Get/Sets Jackpot initial
 sub  jp_initial(;$){
@@ -186,9 +210,11 @@ sub  print_all_results(;$){
   my  %w = ();
   my  $count = 0;
   my  $goods = 0;
+  my  $has_jp = 0;
   $self->all_results( sub{ 
       my  @result = $self->get_result( @_ );
       my  $win = shift( @result );
+      $has_jp = 1 if $win == WIN_JACKPOT;
       $count ++;
       my $d;
       my $numbers = join '.', @result;
@@ -203,14 +229,15 @@ sub  print_all_results(;$){
       print join( ', ', @_ ) . " => $win - " . $d . "\n" if $verbose ; 
     } );
 
-  my  $wres    = scalar(keys(%w)) - 1;
+  my  $wres    = scalar(keys(%w)) - 1 - $has_jp;
   die "No winners in this configuration" if $wres == 0;
   my  $coins   = int( 0.5 + $count * $self->payout / $wres );
 
   foreach( sort( keys( %w ) ) ){
-    my  $revenue = ( $_ eq 0 ? 0 : int( $coins / $w{$_} ) );
     my  @w = split(/\./, $_);
-    my  $d = WIN_DESCRIPTION->{shift(@w)} . " " . join('.', @w );
+    my  $r = shift(@w);
+    my  $revenue = ( $_ eq 0 || $r == WIN_JACKPOT ? 0 : int( $coins / $w{$_} ) );
+    my  $d = WIN_DESCRIPTION->{$r} . " " . join('.', @w );
     printf( "%-28s: %8d rolls (%6.2f%%): %7d coins per win\n", $d , $w{$_}, 
         100.0 * $w{$_} / $count,
         $revenue );
@@ -246,6 +273,7 @@ sub  get_result(@){
   my  $current_reel = 0;
   my  $symbols = $self->symbols();
   my  $win_from = $self->win_from();
+  my  $jp_symbol = $self->jp_symbol();
   my  $jokers    = 0;
   my  $has_symbol = 0;
   my  $has_selected = 0;
@@ -255,6 +283,7 @@ sub  get_result(@){
 
   while( $current_reel < $reels ){
     my  $result = shift;
+    $jp_symbol = undef if $jp_symbol && $jp_symbol != $result;
     if( $result == JOKER ){
       $jokers ++;
     } else {
@@ -284,7 +313,10 @@ sub  get_result(@){
 
   return 0 if !$has_selected && $jokers < $win_from;
 
-  if( $jokers && !$has_selected ){
+
+  if( $jp_symbol ){
+    return  WIN_JACKPOT, ( $jp_symbol == JOKER ? $jokers : $counter->{$jp_symbol} );
+  } elsif( $jokers && !$has_selected ){
     return  WIN_ALL_JOKERS, $jokers;
   } elsif( $jokers ){
     return  WIN_WITH_JOKER, sort( { $b <=> $a } values %{$counter} ), $jokers;
@@ -296,7 +328,7 @@ sub  get_result(@){
 }
 
 
-sub  run(){
+sub  run_test(){
 }
 
 
