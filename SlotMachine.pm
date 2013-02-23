@@ -3,6 +3,9 @@ use  strict;
 use  warnings;
 
 package  SlotMachine;
+# TODO: Pay table
+# TODO: Jackpot symbol
+
 use  constant{
   JOKER => 999,
   WIN_SIMPLE     => 1,
@@ -201,6 +204,7 @@ sub  print_all_results(;$){
     } );
 
   my  $wres    = scalar(keys(%w)) - 1;
+  die "No winners in this configuration" if $wres == 0;
   my  $coins   = int( 0.5 + $count * $self->payout / $wres );
 
   foreach( sort( keys( %w ) ) ){
@@ -241,6 +245,7 @@ sub  get_result(@){
   my  $reels = $self->reels();
   my  $current_reel = 0;
   my  $symbols = $self->symbols();
+  my  $win_from = $self->win_from();
   my  $jokers    = 0;
   my  $has_symbol = 0;
   my  $has_selected = 0;
@@ -266,20 +271,20 @@ sub  get_result(@){
   # Delete unuseful results ...
   my  $tempj = $jokers;
   foreach( sort{ $counter->{$b} <=> $counter->{$a} } keys %{$counter} ){
-    if( $counter->{$_} + $tempj < $self->win_from ){
+    if( $counter->{$_} + $tempj < $win_from ){
       delete $counter->{$_};
-    } elsif( $counter->{$_} >= $self->win_from ){
+    } elsif( $counter->{$_} >= $win_from ){
       $has_selected = 1;
       next;
     } else {
-      $tempj -= $self->win_from - $counter->{$_};
+      $tempj -= $win_from - $counter->{$_};
       $has_selected = 1;
     }
   }
 
-  return 0 unless $has_selected;
+  return 0 if !$has_selected && $jokers < $win_from;
 
-  if( $jokers && !$has_symbol ){
+  if( $jokers && !$has_selected ){
     return  WIN_ALL_JOKERS, $jokers;
   } elsif( $jokers ){
     return  WIN_WITH_JOKER, sort( { $b <=> $a } values %{$counter} ), $jokers;
