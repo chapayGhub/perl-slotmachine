@@ -194,7 +194,6 @@ sub  print_all_results(;$){
 
   my  $wres    = scalar(keys(%w)) - 1;
   my  $coins   = int( 0.5 + $count * $self->payout / $wres );
-  print  "Coins: " . $count * $self->payout . "\n";
 
   foreach( sort( keys( %w ) ) ){
     my  $revenue = ( $_ eq 0 ? 0 : int( $coins / $w{$_} ) );
@@ -208,6 +207,12 @@ sub  print_all_results(;$){
   printf "%-28s: %8d\n", "Total", $count ;
   printf "%-28s: %8d\n", "Revenue", $goods ;
   printf "%-28s: %6.2f vs. %6.2f\n", "Real payout %", $goods / $count * 100.0, $self->payout * 100;
+  printf "%-28s: %6.2f + %6.2f\n", "Jackpot payout %", $self->jp_increment * 100.0, 
+        $self->jp_chance * $self->jp_initial * 100.0;
+  printf "%-28s: %6.2f\n", "Total payout %", 
+    $goods / $count * 100.0 +
+    $self->jp_chance * $self->jp_initial * 100.0 +
+    $self->jp_increment * 100.0;
 }
 
 
