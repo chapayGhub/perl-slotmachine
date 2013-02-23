@@ -11,6 +11,7 @@ use  constant{
   WIN_WITH_JOKER => 2,
   WIN_JACKPOT    => 3,
   WIN_ALL_JOKERS => 4,
+  WIN_SPECIAL    => 5,
 };
 
 use  constant WIN_DESCRIPTION => {
@@ -169,6 +170,83 @@ sub  jp_initial(;$){
   return $self->{jp_initial};
 }
 
+# Add payment for simple result
+# $slog->add_payment_simple($description, $revenue, @definition )
+# @definition is a array of equal counts of symbols
+sub  add_payment_simple($$@){
+  shift->_add_payment( WIN_SIMPLE, shift, shift, @_ );
+}
+
+# Add payment for result with jokers
+# $slog->add_payment_with_jokers($description, $revenue, @definition )
+# @definition is a array of equal counts of symbols. The last position is Joker count.
+sub  add_payment_with_jokers($$@){
+  shift->_add_payment( WIN_WITH_JOKER, shift, shift, @_ );
+}
+
+# Add payment for all jokers
+# $slog->add_payment_all_jokers($description, $revenue )
+sub  add_payment_all_jokers($$){
+  shift->_add_payment( WIN_ALL_JOKERS, shift, shift );
+}
+
+# Add payment for jackpot
+# $slog->add_payment_jackpot($description, $revenue, $jackpot_symbol )
+sub  add_payment_jackpot($$$){
+  shift->_add_payment( WIN_JACKPOT, shift, shift, shift );
+}
+
+# Add payment for special result
+# $slog->add_payment_special($description, $revenue, @symbols )
+sub  add_payment_special($$@){
+  shift->_add_payment( WIN_SPECIAL, shift, shift, @_ );
+}
+
+# Add result to pay table
+# $slot->add_payment( $type, $description, $revenue, @definition )
+sub  _add_payment($$$@){
+  my  $self     = shift;
+  my  $type     = shift;
+  my  $desc     = shift;
+  my  $revenue  = shift;
+  my  @result   = @_;
+
+  die "Payment type $type incorrect"  
+      if grep { $type != $_ } WIN_SIMPLE, WIN_WITH_JOKER, WIN_ALL_JOKERS, WIN_JACKPOT, WIN_SPECIAL ;
+
+  $self->{paytable} = [] unless exists $self->{paytable};
+  if( $type == WIN_SIMPLE || $type == WIN_WITH_JOKER ){
+    die "Result can't contain Jokers" if grep{ $_ == JOKER } @result;
+    my $count = 0; 
+    foreach(@result){ $count += $_ };
+    if( $type == WIN_SIMPLE ){
+      @result = sort{ $b <=> $a } @result;
+    } else {
+      my $j = $result[-1];
+      @result = sort{ $b <=> $a } @result[0..-1];
+      push @result, $j;
+    }
+
+    die "Too much results ($count), must be less or equal than reels" if( $count > $self->reels );
+    die "Too much jokers (" . $result[-1] . "), must be less or equal than " . $self->jokers 
+                                           if $type == WIN_WITH_JOKER && $result[-1] > $self->jokers ;
+    push @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc, result => \@result };
+  } elsif( $type == WIN_ALL_JOKERS ){
+    push @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc };
+  } elsif( $type == WIN_JACKPOT ){
+    die "Symbol ". $result[0] ." incorrect" if $result[0] > $self->symbols;
+    push @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc, jackpot => $result[0] };
+  } elsif( $type == WIN_SPECIAL ){
+    die "Must indiate a symbol for each reel" unless scalar(@result) == $self->reels;
+    @result = sort @result;
+    push @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc, result => \@result };
+  } else {
+    die "Type $type unimplemented"
+  }
+}
+
+
+
 # Get array of symbols for reel
 sub  symbols_by_reel(;$){
   my $self = shift;
@@ -255,14 +333,13 @@ sub  print_all_results(;$){
     $self->jp_increment * 100.0;
 }
 
-
 # Return result of given symbols
 # Result is a array
 #   $result[0] is a win type:
 #           LOSE (0)
 #           WIN_SIMPLE (1):     Win something
 #           WIN_WITH_JOKER (2): Win with al least one Joker
-#           WIN_ALL_JOKER(3)  : All of symbols are Jokers
+#           WIN_ALL_JOKERS(3)  : All of symbols are Jokers
 #   $result[1..n]
 #           numbers of equal symbos (ordered)
 #   if WIN_WITH_JOKER is found, the last position of result ($result[-1]) is Joker quantity
@@ -279,22 +356,10 @@ sub  get_result(@){
   my  $has_selected = 0;
 
   die "Number of results must be equal to reels ($reels)" if $reels != scalar(@_);
-  my  $counter = {};
-
-  while( $current_reel < $reels ){
-    my  $result = shift;
-    $jp_symbol = undef if $jp_symbol && $jp_symbol != $result;
-    if( $result == JOKER ){
-      $jokers ++;
-    } else {
-      $has_symbol = 1;
-      if( $counter->{$result} ){
-        $counter->{$result} ++;
-      } else {
-        $counter->{$result} = 1;
-      }
-    }
-    $current_reel ++;
+  my  $counter = $self->_count_symbols( @_ );
+  if( exists $counter->{SlotMachine::JOKER} ){
+    $jokers = $counter->{SlotMachine::JOKER};
+    delete $counter->{SlotMachine::JOKER};
   }
 
   # Delete unuseful results ...
@@ -313,22 +378,18 @@ sub  get_result(@){
 
   return 0 if !$has_selected && $jokers < $win_from;
 
-
-  if( $jp_symbol ){
+  if( $jp_symbol && ( ( exists $counter->{$jp_symbol} && $counter->{$jp_symbol} == $reels ) || 
+                      ( $jp_symbol == JOKER && $jokers == $reels ) ) ){
     return  WIN_JACKPOT, ( $jp_symbol == JOKER ? $jokers : $counter->{$jp_symbol} );
   } elsif( $jokers && !$has_selected ){
     return  WIN_ALL_JOKERS, $jokers;
   } elsif( $jokers ){
     return  WIN_WITH_JOKER, sort( { $b <=> $a } values %{$counter} ), $jokers;
-  } elsif( $has_symbol ){
+  } elsif( keys %{$counter} ){
     return  WIN_SIMPLE, sort { $b <=> $a } values %{$counter};
   } else {
     die "Error of result";
   }
-}
-
-
-sub  run_test(){
 }
 
 
@@ -380,6 +441,19 @@ sub  _generate_max(){
     push  @array, $symbols + 1;
   }
   return  @array;
+}
+
+sub  _count_symbols(@){
+  my $self = shift;
+  my $counter = {};
+  while( my $result = shift ){
+    if( $counter->{$result} ){
+      $counter->{$result} ++;
+    } else {
+      $counter->{$result} = 1;
+    }
+  }
+  return  $counter;
 }
 
 1;
