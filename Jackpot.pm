@@ -23,49 +23,69 @@ sub  connect_to($){
   my ( $class, $filename ) = @_;
   die "Must be called for class" if ref $class;
   _create $filename unless -e $filename;
-  return bless{ f => $filename };
+  open( my $fh, "+<", $filename ) or die( "Error reading " . $filename . " - $!" );
+  return bless{ f => $filename, h => $fh };
+}
+
+sub  DESTROY{
+  my  $self = shift;
+  close( $self->{h} ) if $self->{h};
+}
+
+sub  _fh(){ return shift->{h}; }
+sub  _fn(){ return shift->{f}; }
+
+sub  _lock($){
+  my $self = shift;
+  flock( $self->_fh, LOCK_EX ) or die "Error locking " . $self->_fn . ": $!";
+  seek( $self->_fh, 0, 0 );
+}
+
+sub  _unlock($){
+  my $self = shift;
+  flock( $self->_fh, LOCK_UN ) or die "Error unlocking " . $self->_fn . ": $!";
 }
 
 sub  _getdata($){
-  my  $filename = shift;
+  my  $self = shift;
   my  $data;
-  open( my $fh, "<", $filename ) or die( "Error locking " . $filename . " - $!" );
-  flock( $fh, LOCK_EX ) or die "Error locking " . $filename . " - $!";
-  read( $fh, $data, 8 ) or die "Error reading " . $filename . " - $!";
-  close( $fh );
+  $self->_lock( );
+  read( $self->_fh, $data, 8 ) or die "Error reading - $!";
+  $self->_unlock( );
   return unpack "II", $data;
+}
+
+sub  _setdata($$$){
+  my  $self = shift;
+  my  $balance = shift;
+  my  $counter = shift;
+  my  $data;
+  _lock( $self->_fh );
+  $data = pack "II", $balance, $counter;
+  print( $self->_fh, $data, 8 ) or die "Error writing - $!";
+  _unlock( $self->_fh );
 }
 
 # Returns Jackpot balance
 sub  get(){
-  my( $balance, $counter ) = _getdata(shift->{f});
+  my( $balance, $counter ) = _getdata(shift->{h});
   return $balance / 1000;
 }
 
 # Add funds to Jackpot
 sub  add($){
-  my  $filename = shift->{f};
-  my  $funds    = shift;
-  my  $data;
-  open( my $fh, "<", $filename ) or die( "Error locking " . $filename . " - $!" );
-  flock( $fh, LOCK_EX ) or die "Error locking " . $filename . " - $!";
-  read( $fh, $data, 8 ) or die "Error reading " . $filename . " - $!";
-  my( $balance, $counter ) = unpack "II", $data;
-  print( $fh, pack( "II", $balance + $funds * 1000, $counter + 1 ) );
-  close( $fh );
+  my  $self  = shift;
+  my  $funds = shift;
+  my( $balance, $counter ) = $self->_getdata();
+  $self->_setdata( $balance + $funds * 1000, $counter + 1 );
 }
 
 # Retire funds!
 sub  retire(){
-  my  $filename = shift->{f};
-  my  $data;
-  open( my $fh, "<", $filename ) or die( "Error locking " . $filename . " - $!" );
-  flock( $fh, LOCK_EX ) or die "Error locking " . $filename . " - $!";
-  read( $fh, $data, 8 ) or die "Error reading " . $filename . " - $!";
-  my( $balance, $counter ) = unpack "II", $data;
+  my  $self  = shift;
+  my( $balance, $counter ) = $self->_getdata();
   my $retire = int( $balance / 1000 );
-  print( $fh, pack( "II", $balance - $retire * 1000, 0 ) );
-  close( $fh );
+  $self->_setdata( "II", $balance - $retire * 1000, 0 );
   return  $retire;
 }
 
