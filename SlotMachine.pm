@@ -25,19 +25,36 @@ use  constant WIN_DESCRIPTION => {
 };
 
 # Create new SlotMachine
+#   my $slot = SlotMachine->new( \%options )
+#   my $slot = SlotMachine->new( './slot_file.conf' )
+#
 # Options:
-#    payout:       Payout coeficient of the machine. Default 0.92
-#    overpay:      Maximun payment over balance. Default 10 coins
-#    jp_chance:    Chance of Jackpot. Default 0.001
-#    jp_increment: Increment of Jackpot fund on every run. Default 0.07 coins
-#    jp_initial:   Initial value of Jackpot. Default 10 coins
-#    jp_minimun:   Minimum price of Jackpot. Default 50 coins
-#    jp_symbol:    Symbol for Jackpot. Default undef
-#    jp_name:      Name for jackpot. Default jp
-#    symbols:      Symbols by reel. Default 6
-#    reels:        Reels of machine. Default 3
-#    jokers:       Quantity of Jokers. Default 0.
-#    win_from:     Quantity of equals result to win. Default: reels
+#   payout:       Payout coeficient of the machine. Default 0.92.
+#                 This is not a real payout. The real payout depends on award prices
+#                 declares on the machine.
+#   overpay:      Maximun payment over balance. Default 10 coins. Not implemented
+#   jp_chance:    Chance of Jackpot. Default 0.001
+#   jp_increment: Increment of Jackpot fund on every run. Default 0.07 coins
+#   jp_initial:   Initial value of Jackpot. Default 10 coins
+#   jp_minimun:   Minimum price of Jackpot. Default 50 coins. Not implemented
+#   jp_symbol:    Symbol for Jackpot. Default undef
+#   jp_name:      Name for jackpot. Default jp
+#   symbols:      Symbols by reel. Default 6
+#   reels:        Reels of machine. Default 3
+#   jokers:       Quantity of Jokers. Default 0.
+#   win_from:     Quantity of equals result to win. Default: reels
+#
+# Config file must include a param per line,
+#   payout=0.90
+#   symbols=10
+#   ...
+#
+# Additionally, in config file is possible add payments to table pay
+#   simple_pay=Description, revenue, definition         # see add_payment_simple for details
+#   with_joker_pay=Description, revenue, definition     # see add_payment_with_jokers for details
+#   all_jokers_pay=Description, revenue                 # see add_payment_all_jokers for details
+#   jackpot_pay= Description, symbol              
+#
 sub  new(;$){
   if( scalar( @_ ) > 2 ){
     my $class = shift;
@@ -46,6 +63,8 @@ sub  new(;$){
       $opts{$o} = shift;
     }
     return $class->new( \%opts );
+  } elsif( scalar( @_ ) == 2 && ( -e $_[1] ) ){
+    return shift->new_from_file( shift );
   }
   my ( $class, $opts ) = @_;
   $opts = { } unless $opts;
@@ -68,6 +87,70 @@ sub  new(;$){
   $self->_set_jp_symbol_chance if exists $opts->{jp_symbol};
   return  $self;
 }
+
+
+# Creates SlotMachine taking file as config.
+sub  new_from_file($){
+  my  $class = shift;
+  my  $file  = shift;
+
+  my  %opts = (); my @pays = ();
+  my  $key; my $value;
+
+  open( my $fh, '<', $file ) or die( "Can't open $file: $!" );
+  my $line = 0;
+  while( <$fh> ){
+    $line ++;
+    s/(\#.*$)//;
+    chomp;
+    next unless $_;
+    die "Error on $file:$line" unless $_ =~ /^.+\=.+$/;
+    ( $key, $value ) = split( /\=/ );
+    $key =~ s/^(\s+)//;
+    $key =~ s/(\s+)//;
+    $value =~ s/^(\s+)//;
+    $value =~ s/(\s+)$//;
+    # Numeric values;
+    if( grep { $_ eq $key } qw(payout overpay 
+                               symbols reels jokers win_from 
+                               jp_chance jp_increment jp_initial jp_minimun jp_symbol) ){
+      $opts{$key} = $value * 1;
+      #  print  $key . "=" . $value . "\n";
+    # String values
+    } elsif( grep { $_ eq $key } qw( jp_name ) ){
+      $opts{$key} = $value;
+      #  print  $key . "=" . $value . "\n";
+    } elsif( grep { $_ eq $key } qw( simple_pay with_joker_pay all_jokers_pay jackpot_pay ) ){
+      push @pays, $key, $value;
+    } else {
+      die "Invalid key $key in $file:$line";
+    }
+  }
+  my  $slot = $class->new( \%opts );
+  while( $key = shift @pays ){
+    $value = shift @pays;
+    my  @params = split ',', $value;
+    # print  $key . "=" . join( ',', @params ). "\n";
+    if( $key eq 'simple_pay' ){
+      $slot->add_payment_simple( shift @params, # Description
+        int(shift @params ),                    # Revenue
+        map{ int($_) } @params );
+    } elsif( $key eq 'with_joker_pay' ){
+      $slot->add_payment_with_jokers( shift @params,  # Description
+        int( shift  @params ),                        # Revenue
+        map{ int($_) } @params );
+    } elsif( $key eq 'all_jokers_pay' ){
+      $slot->add_payment_all_jokers( $params[0], int($params[1]) );
+    } elsif( $key eq 'jackpot_pay' ){
+      $slot->add_payment_jackpot( $params[0], int( $params[1] ) );
+    } else {
+      die "Invalid key: $key. Internal error" ;
+    }
+  }
+  return  $slot;
+}
+
+
 
 # Get/Sets payout of machine
 sub  payout(;$){
