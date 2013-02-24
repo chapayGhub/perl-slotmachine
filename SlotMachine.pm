@@ -4,7 +4,6 @@ use  warnings;
 
 package  SlotMachine;
 use Digest::SHA qw(sha512_hex);
-# TODO: Pay table
 
 use  constant{
   JOKER => 999,
