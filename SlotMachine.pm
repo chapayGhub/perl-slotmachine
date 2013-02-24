@@ -12,6 +12,7 @@ use  constant{
   WIN_JACKPOT    => 3,
   WIN_ALL_JOKERS => 4,
   WIN_SPECIAL    => 5,
+  LOSE           => 0
 };
 
 use  constant WIN_DESCRIPTION => {
@@ -191,9 +192,9 @@ sub  add_payment_all_jokers($$){
 }
 
 # Add payment for jackpot
-# $slog->add_payment_jackpot($description, $revenue, $jackpot_symbol )
+# $slog->add_payment_jackpot($description, $jackpot_symbol )
 sub  add_payment_jackpot($$$){
-  shift->_add_payment( WIN_JACKPOT, shift, shift, shift );
+  shift->_add_payment( WIN_JACKPOT, shift, 0, shift );
 }
 
 # Add payment for special result
@@ -212,7 +213,7 @@ sub  _add_payment($$$@){
   my  @result   = @_;
 
   die "Payment type $type incorrect"  
-      if grep { $type != $_ } WIN_SIMPLE, WIN_WITH_JOKER, WIN_ALL_JOKERS, WIN_JACKPOT, WIN_SPECIAL ;
+      unless grep { $type == $_ } WIN_SIMPLE, WIN_WITH_JOKER, WIN_ALL_JOKERS, WIN_JACKPOT, WIN_SPECIAL ;
 
   $self->{paytable} = [] unless exists $self->{paytable};
   if( $type == WIN_SIMPLE || $type == WIN_WITH_JOKER ){
@@ -222,8 +223,8 @@ sub  _add_payment($$$@){
     if( $type == WIN_SIMPLE ){
       @result = sort{ $b <=> $a } @result;
     } else {
-      my $j = $result[-1];
-      @result = sort{ $b <=> $a } @result[0..-1];
+      my $j = pop( @result );
+      @result = sort{ $b <=> $a } @result;
       push @result, $j;
     }
 
@@ -234,8 +235,8 @@ sub  _add_payment($$$@){
   } elsif( $type == WIN_ALL_JOKERS ){
     push @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc };
   } elsif( $type == WIN_JACKPOT ){
-    die "Symbol ". $result[0] ." incorrect" if $result[0] > $self->symbols;
-    push @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc, jackpot => $result[0] };
+    die "Symbol ". $result[0] ." incorrect" if $result[0] != JOKER && $result[0] > $self->symbols;
+    unshift @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc, symbol => $result[0] };
   } elsif( $type == WIN_SPECIAL ){
     die "Must indiate a symbol for each reel" unless scalar(@result) == $self->reels;
     @result = sort @result;
@@ -243,6 +244,7 @@ sub  _add_payment($$$@){
   } else {
     die "Type $type unimplemented"
   }
+  $self;
 }
 
 
@@ -332,6 +334,97 @@ sub  print_all_results(;$){
     $self->jp_chance * $self->jp_initial * 100.0 +
     $self->jp_increment * 100.0;
 }
+
+sub  print_all_rolls(;$){
+  my  $self = shift;
+  my  $verbose = shift;
+  my  %w = ();
+  my  $count = 0;
+  my  $goods = 0;
+  my  $has_jp = 0;
+  $self->all_results( sub{ 
+      my  @result = $self->get_goods( @_ );
+      $count ++;
+      my  $win = shift( @result );
+      $has_jp ++ if $win == WIN_JACKPOT;
+      my  $d = shift @result;
+      if( exists $w{$d} ){
+        $w{$d}->{c} ++;
+        $w{$d}->{t} += $result[0];
+      } else {
+        $w{$d} = { c => 1, r => $result[0], t => $result[0] };
+      }
+      $goods += $result[0];
+      print join( ', ', @_ ) . " => $win - " . $d . "\n" if $verbose ; 
+    } );
+
+ 
+  foreach( keys %w ){
+    printf( "%-28s: %8d rolls (%6.2f%%): Revenue total %7d (%5d/win) \n", $_ , 
+      $w{$_}->{c}, $w{$_}->{c} * 100.0 / $count, $w{$_}->{t}, $w{$_}->{r} );
+  } 
+  printf "%-28s: %8d rolls\n", "Total", $count ;
+  printf "%-28s: %8d coins\n", "Revenue", $goods ;
+  printf "%-28s: %8d coins\n", "Jackpot", $count * ( $self->jp_increment + 
+    $self->jp_initial * ( $has_jp ? $has_jp / $count : $self->jp_chance ) );
+  printf "%-28s: %6.2f (parameter is %6.2f)\n", "Real payout %", $goods / $count * 100.0, $self->payout * 100;
+
+  printf "%-28s: %6.2f\n", "Total payout %", 
+    $goods / $count * 100.0 +
+    $self->jp_chance * $self->jp_initial * 100.0 +
+    $self->jp_increment * 100.0;
+
+}
+
+# Return goods from table
+sub  get_goods(@){
+  my $self = shift;
+  my @result = @_;
+  my $w  = undef;
+  die "Must inform one result per reel" unless scalar(@result) == $self->reels;
+  die "Payment table empty" unless exists $self->{paytable};
+  my $counter = $self->_count_symbols(@result);
+  foreach my $p( @{$self->{paytable}} ){
+    if( $p->{type} == WIN_SIMPLE ){
+      my $ra = join '-', @{$p->{result}};
+      my %c = %{$counter}; delete $c{SlotMachine::JOKER};
+      my $rb = join '-', sort { $b <=> $a } values %c;
+      if( $ra eq $rb ){
+        $w = $p if !defined $w || $p->{revenue} > $w->{revenue};
+      }
+    } elsif( $p->{type} == WIN_WITH_JOKER ){
+      next unless exists $counter->{SlotMachine::JOKER};
+      my $ra = join '-', @{$p->{result}};
+      my %c = %{$counter}; delete $c{SlotMachine::JOKER};
+      my $rb = join '-', sort( { $b <=> $a } values %c ), $counter->{SlotMachine::JOKER};
+      if( $ra eq $rb ){
+        $w = $p if !defined $w || $p->{revenue} > $w->{revenue};
+      }
+    } elsif( $p->{type} == WIN_ALL_JOKERS ){
+      if( exists $counter->{SlotMachine::JOKER} && $counter->{SlotMachine::JOKER} == $self->reels ){
+        $w = $p if !defined $w || $p->{revenue} > $w->{revenue};
+      }
+    } elsif( $p->{type} == WIN_JACKPOT ){
+      my $s = $p->{symbol};
+      if( $counter->{$s} && $counter->{$s} == $self->reels ){
+        $w = $p; 
+        last; # Jackpot always win!
+      }
+    } elsif( $p->{type} == WIN_SPECIAL ){
+      my $a = join '-', sort @result;
+      my $b = join '-', @{$p->{result}};
+      if( $a eq $b ){
+        $w = $p if !defined $w || $p->{revenue} > $w->{revenue};
+      }
+    } else {
+      die "Incorrect type";
+    }
+  }
+
+  return  LOSE, WIN_DESCRIPTION->{SlotMachine::LOSE}, 0 unless defined $w;
+  return  $w->{type}, $w->{description}, $w->{revenue};
+}
+
 
 # Return result of given symbols
 # Result is a array
