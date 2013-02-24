@@ -146,10 +146,15 @@ sub  jp_chance(;$){
 
 sub  _set_jp_symbol_chance(){
   my $self = shift;
-  $self->{jp_symbol_chance} = 1 / 
-      ( $self->{symbols} ** ( $self->{reels} - $self->{jokers} ) * 
-      ( $self->{symbols} + 1 ) ** $self->{jokers} ) ;
+  $self->{jp_symbol_chance} = 1 / $self->total_rolls;
 }
+
+sub  _total_rolls(){
+  my $self = shift;
+  return    $self->{symbols} ** ( $self->{reels} - $self->{jokers} ) * 
+            ( $self->{symbols} + 1 ) ** $self->{jokers}  ;
+}
+
 # Get/Sets Jackpot chance
 sub  jp_symbol(;$){
   my $self = shift;
@@ -363,7 +368,7 @@ sub  print_all_rolls(;$){
     printf( "%-28s: %8d rolls (%6.2f%%): Revenue total %7d (%5d/win) \n", $_ , 
       $w{$_}->{c}, $w{$_}->{c} * 100.0 / $count, $w{$_}->{t}, $w{$_}->{r} );
   } 
-  printf "%-28s: %8d rolls\n", "Total", $count ;
+  printf "%-28s: %8d rolls (%d)\n", "Total", $count, $self->_total_rolls ;
   printf "%-28s: %8d coins\n", "Revenue", $goods ;
   printf "%-28s: %8d coins\n", "Jackpot", $count * ( $self->jp_increment + 
     $self->jp_initial * ( $has_jp ? $has_jp / $count : $self->jp_chance ) );
