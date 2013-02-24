@@ -3,6 +3,7 @@ use  strict;
 use  warnings;
 
 package  SlotMachine;
+use Digest::SHA qw(sha512_hex);
 # TODO: Pay table
 
 use  constant{
@@ -428,6 +429,26 @@ sub  get_goods(@){
 
   return  LOSE, WIN_DESCRIPTION->{SlotMachine::LOSE}, 0 unless defined $w;
   return  $w->{type}, $w->{description}, $w->{revenue};
+}
+
+# Roll all reels, using two parameters for SHA512 calculation
+sub  roll($$){
+  my  $self = shift;
+  my  $p1   = shift;
+  my  $p2   = shift;
+  my  $current_reel = 0;
+  my  $reels = $self->reels;
+  my  @results = ();
+  while( $current_reel < $reels ){
+    my  $sha = sha512_hex( $p1 . $p2 );
+    my  $symbol = hex( substr( $sha, -6 ) ) % $self->symbols_by_reel($current_reel);
+    $symbol ++;
+    $symbol = JOKER if $self->reel_has_joker( $current_reel ) && $symbol == $self->symbols_by_reel($current_reel);
+    push @results, $symbol;
+    $p2 = $sha;
+    $current_reel++;
+  }
+  return  $p2, @results;
 }
 
 
