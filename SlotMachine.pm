@@ -176,6 +176,16 @@ sub  jp_initial(;$){
   return $self->{jp_initial};
 }
 
+# Get/Sets Jackpot name
+sub  jp_name(;$){
+  my $self = shift;
+  if( scalar(@_) == 1 ){
+    die "Can't define jp_name if Jackpot is open" if $self->{jackpot};
+    $self->{jp_name} = shift;
+  }
+  return $self->{jp_name};
+}
+
 # Add payment for simple result
 # $slog->add_payment_simple($description, $revenue, @definition )
 # @definition is a array of equal counts of symbols
@@ -242,6 +252,7 @@ sub  _add_payment($$$@){
   } elsif( $type == WIN_JACKPOT ){
     die "Symbol ". $result[0] ." incorrect" if $result[0] != JOKER && $result[0] > $self->symbols;
     unshift @{$self->{paytable}}, { type => $type, revenue => $revenue, description => $desc, symbol => $result[0] };
+    $self->{roll_jackpot} = 1;
   } elsif( $type == WIN_SPECIAL ){
     die "Must indiate a symbol for each reel" unless scalar(@result) == $self->reels;
     @result = sort @result;
