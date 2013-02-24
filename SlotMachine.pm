@@ -4,6 +4,7 @@ use  warnings;
 
 package  SlotMachine;
 use Digest::SHA qw(sha512_hex);
+use Jackpot;
 
 use  constant{
   JOKER => 999,
@@ -461,6 +462,29 @@ sub  roll($$){
   return  $p2, @results;
 }
 
+# Add to jackpot
+sub  jp_add(){
+  my $self = shift;
+  my $jackpot = $self->_open_jackpot;
+  $jackpot->add( $self->jp_increment );
+}
+
+# Get jackpot
+sub  jp_get(){
+  my $self = shift;
+  my $jackpot = $self->_open_jackpot;
+  $jackpot->get( );
+}
+
+# Retire jackpot
+sub  jp_retire(){
+  my $self = shift;
+  my $jackpot = $self->_open_jackpot;
+  my $retire = $jackpot->retire( );
+  $jackpot->add( $self->jp_initial );
+  return $retire;
+}
+
 
 # Return result of given symbols
 # Result is a array
@@ -583,6 +607,20 @@ sub  _count_symbols(@){
     }
   }
   return  $counter;
+}
+
+sub  _open_jackpot(){
+  my $self = shift;
+  if( !$self->{jackpot} ){
+    die "Not jackpot" unless $self->jp_name();
+    mkdir './jackpot' unless -d './jackpot';
+    $self->{jackpot} = Jackpot->connect_to( './jackpot/' . $self->jp_name() . '.dat' );
+    my $balance = $self->{jackpot}->get();
+    if( $balance < $self->jp_initial ){
+      $self->{jackpot}->add( $self->jp_initial - $balance );
+    }
+  }
+  return $self->{jackpot};
 }
 
 1;
