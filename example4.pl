@@ -5,7 +5,7 @@ use  warnings;
 use  SlotMachine;
 unlink './jackpot/myjp.dat' if -e './jackpot/myjp.dat';
 
-my $s = SlotMachine->new( jp_name => 'myjp', jp_increment => 0.08, symbols => 10 );
+my $s = SlotMachine->new( jp_name => 'myjp', jp_increment => 0.10, symbols => 10 );
 
 $s->add_payment_simple( '3 on line', 32, 3 );
 $s->add_payment_simple( 'pair', 2, 2, 1 );
