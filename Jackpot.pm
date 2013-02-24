@@ -13,7 +13,7 @@ sub  _create($){
   my $filename = shift;
   die "File $filename already exists" if -e $filename;
   open( my $fh, ">", $filename ) or die( $! );
-  print( $fh, pack( "II", 0, 0 ) );
+  print $fh  pack( "II", 0, 0 );
   close( $fh );
 }
 
